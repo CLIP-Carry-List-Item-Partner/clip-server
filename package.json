@@ -1,0 +1,21 @@
+{
+  "name": "clip",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun src/index.ts",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "build": "tsc -p . && tsc-alias"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.7.4",
+    "nodemon": "^3.1.7",
+    "prisma": "^5.20.0",
+    "ts-node": "^10.9.2",
+    "typescript": "5.5.4"
+  },
+  "dependencies": { "@prisma/client": "^5.20.0",  "dotenv": "^16.4.5", "express": "^4.21.0", "tsc-alias": "^1.8.10", "zod": "^3.23.8" }
+}
