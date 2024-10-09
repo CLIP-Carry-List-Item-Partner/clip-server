@@ -2,7 +2,6 @@ import type { Request, Response } from "express";
 import db from "@/services/db";
 import { listSchema, listUpdateSchema } from "@/models/list.model";
 import { idSchema } from "@/models/id.model";
-import { nanoid } from "nanoid";
 
 import {
   success,
@@ -33,55 +32,52 @@ async function generateListId() {
 
 // View All List
 export const getAllList = async (req: Request, res: Response) => {
-  try  {
-    // Fetch all lists
-    const list = await db.list.findMany({
-      select: {
-        id: true,
-        name: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
-    // Fetch Items for each list
-    const fetchItems = async (list: any) => {
-      const items = await db.listOfItems.findMany({
-        where: {
-          listId: {
-            in: list.map((list: any) => list.id),
-          },
-        },
-        select: {
-          item: {
-            select: {
-            id:true,
+  try {
+    // Mencari list yang ada di database
+    const lists = await db.list.findMany({
+      include: {
+        items: {
+          select: {
+            itemId: true,
+            listId: true,
           },
         },
       },
     });
-    return items;
-  };
 
-  const listWithItems = await Promise.all(
-    list.map(async (list: any) => {
-      const items = await fetchItems(list);
-      return {
-        ...list,
-        items,
-      };
-    })
-  )
-  return success(res, "List fetched successfully", listWithItems);
+    const listsWithItems = await Promise.all(
+      lists.map(async (list) => {
+        const items = await db.listOfItems.findMany({
+          where: {
+            listId: list.id,
+          },
+          select: {
+            item: {
+              select: {
+                id: true,
+                name: true,
+            },
+          },
+        },
+      });
+
+        return {
+          ...list,
+          items: items.map((item) => ({itemId: item.item.id, itemName: item.item.name})),
+        };
+      })
+    )
+    return success(res, "List fetched successfully", listsWithItems);
   } catch (err) {
     return internalServerError(res);
   }
 };
 
+
 // Get specific List by ID
 export const getListById = async (req: Request, res: Response) => {
   try {
-    const validateId = idSchema.safeParse(req.body) 
+    const validateId = idSchema.safeParse({ id: Number(req.params.id) });
   
   if (!validateId.success) {
     return validationError(res, parseZodError(validateId.error));
@@ -89,15 +85,17 @@ export const getListById = async (req: Request, res: Response) => {
 
   const list = await db.list.findUnique({
     where: {
-      id: validateId.data.id
+      id: validateId.data.id,
     },
-    select: {
-      id: true,
-      name: true,
-      createdAt: true,
-      updatedAt: true,
+    include: {
+      items: {
+        select: {
+          itemId: true,
+          listId: true,
+        },
+      },
     },
-  });
+  })
 
   if (!list) {
     return notFound(res, "List not found");
@@ -125,7 +123,8 @@ export const createList = async (req: Request,res: Response) => {
     }
 
     // nanti perlu dicek lagi, buat controller untuk user dulu
-    const userId = req.user?.id;
+    // untuk testing dulu aja, nanti perlu buat user nya beneran
+    const userId = 1;
 
     if (!userId) {
       return validationError(res, "User not found");
@@ -171,7 +170,21 @@ export const updateList = async (req: Request, res: Response) => {
         id: validateBody.data.id,
       },
       data: {
+        // update nama list
         name: validateBody.data.name,
+
+        // update item (  )
+        items: {
+          create: {
+            item: {
+              create: {
+                id: validateBody.data.item.id,
+                name: validateBody.data.item.name,
+              }
+            }
+          }
+        }
+        
       },
     })
 
@@ -184,7 +197,9 @@ export const updateList = async (req: Request, res: Response) => {
 // Delete List
 export const deleteList = async (req: Request, res: Response) =>  {
   try {
-    const validateId = idSchema.safeParse(req.body);
+    const validateId = idSchema.safeParse({
+      id: Number(req.params.id),
+    });
 
     if (!validateId.success) {
       return validationError(res, parseZodError(validateId.error));

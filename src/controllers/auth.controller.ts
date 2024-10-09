@@ -19,23 +19,8 @@ import {
 } from "@/utils/responses";
 
 
-// const userClient = new PrismaClient().users;
 
 // get all users
-
-export const getAllUsers = async (req: Request, res: Response) => {
-  try {
-    const users = await db.users.findMany({
-      include: {
-        List: true
-      }
-    })
-
-    res.status(200).json({data: users});
-  } catch (err) {
-    console.log(err);
-  }
-}
 
 // get user by id
 
