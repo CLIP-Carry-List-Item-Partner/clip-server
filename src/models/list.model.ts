@@ -13,13 +13,13 @@ export const listUpdateSchema = listSchema.pick({
   name: true,
   userId: true,
 }).extend({
-  item: z.object({
-    id: z.string(),
-    name: z.string().min(3).max(255),
-    createdAt: z.string().transform((val) => new Date(val)),
-    updatedAt: z.string().transform((val) => new Date(val)),
-  })
-})
+    items: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string().min(3).max(255),
+    })
+  ).optional(),
+});
 
 export type List = z.infer<typeof listSchema>
 export type ListUpdate = z.infer<typeof listUpdateSchema>

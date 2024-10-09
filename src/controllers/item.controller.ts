@@ -17,23 +17,6 @@ import {
 } from "@/utils/responses";
 
 
-// Generate ItemId
-
-// async function generateItemId() {
-//   try {
-//     const item = await db.item.findMany();
-//     if (item.length === 0) {
-//       return 1;
-//     }
-
-//     const lastItem = item[item.length - 1];
-//     return lastItem.id + 1;
-//   } catch (err) {
-//     return null;
-//   }
-// }
-
-
 // Get all items
 export const getAllItems = async (req: Request, res: Response) => {
   try {
@@ -44,8 +27,17 @@ export const getAllItems = async (req: Request, res: Response) => {
           name: true, 
           createdAt: true,
           updatedAt: true,
+          lists: {
+            select: {
+              list: {
+                select: {
+                  name: true,
+              }
+          }
         },
-      }
+      },
+    },
+  },
     );
 
     return success(res, "Items fetched successfully", items);
@@ -67,6 +59,17 @@ export const getItemById = async (req: Request, res: Response) => {
       where: {
         id: validateId.data.id,
       },
+      include: {
+        lists: {
+          select: {
+            list: {
+              select: {
+                name: true,
+              }
+            }
+          },
+        },
+      }
     })
 
     return success(res, "Item fetched successfully", item);
@@ -108,9 +111,11 @@ export const updateItem = async (req: Request, res: Response) => {
       return validationError(res, parseZodError(validateItem.error))
     }
 
+    const itemId = req.params.id;
+
     const item = await db.item.findUnique({
       where: {
-        id: validateItem.data.id,
+        id: itemId,
       }
     })
 
@@ -120,7 +125,7 @@ export const updateItem = async (req: Request, res: Response) => {
 
     const updateItem = await db.item.update({
       where: {
-        id: validateItem.data.id
+        id: itemId
       },
       data: {
         name: validateItem.data.name
@@ -155,14 +160,102 @@ export const deleteItem = async(req: Request, res: Response) => {
       return notFound(res, "Item not found")
     }
 
+    const list = await db.listOfItems.findMany({
+      where: {
+        itemId: validateItem.data.id
+      },
+      include:{
+        list: {
+          select: {
+            name: true
+          }
+        }
+      }
+    })
+
+    const listsToDelete = list.map(list => ({
+      name: list.list.name
+    }))
+
+    if(list.length>0){
+        await db.listOfItems.deleteMany({
+        where: {
+          itemId: validateItem.data.id
+        }
+      })
+    }
+
     const deleteItem = await db.item.delete({
       where: {
         id: validateItem.data.id
       }
     })
 
-    return success (res, "Item successfully deleted", deleteItem)
+    return success (res, "Item successfully deleted", {deleteItem, deletedFromList: listsToDelete})
+
   } catch (err) {
     return internalServerError(res)
   }
 }
+
+
+// Add Item to List
+export const addItemToList = async (req: Request, res: Response) => {
+  try {
+    const { listId, itemId } = req.body;
+
+    if (!listId || !itemId) {
+      return validationError(res, "listId and itemId are required");
+    }
+
+    // Cek list
+    const list = await db.list.findUnique({
+      where: {
+        id: listId,
+      },
+    });
+
+    if (!list) {
+      return notFound(res, "List not found");
+    }
+
+    // Cek item
+    const item = await db.item.findUnique({
+      where: {
+        id: itemId,
+      },
+    });
+
+    if (!item) {
+      return notFound(res, "Item not found");
+    }
+
+    // Cek apakah relasi sudah ada
+    const existingRelation = await db.listOfItems.findUnique({
+      where: {
+        listId_itemId: {
+          listId: listId,
+          itemId: itemId,
+        },
+      },
+    });
+
+    if (existingRelation) {
+      return conflict(res, "Item already exists in the list");
+    }
+
+    // Buat relasi baru di tabel
+    const newRelation = await db.listOfItems.create({
+      data: {
+        listId: listId,
+        itemId: itemId,
+      },
+    });
+
+    return success(res, "Item added to list successfully", newRelation);
+  } catch (err) {
+    console.error(err);
+    return internalServerError(res);
+  }
+};
+

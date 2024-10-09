@@ -90,11 +90,16 @@ export const getListById = async (req: Request, res: Response) => {
     include: {
       items: {
         select: {
-          itemId: true,
-          listId: true,
+          item: {
+            select: {
+              id: true,
+              name: true,
+          }
         },
+        listId: true,
       },
     },
+  },
   })
 
   if (!list) {
@@ -174,20 +179,39 @@ export const updateList = async (req: Request, res: Response) => {
         name: validateBody.data.name,
 
         // update item (  )
-        items: {
-          create: {
-            item: {
-              create: {
-                id: validateBody.data.item.id,
-                name: validateBody.data.item.name,
-              }
-            }
-          }
-        }
-        
+        // items: {
+        //   create: {
+        //     item: {
+        //       create: {
+        //         id: validateBody.data.item.id,
+        //         name: validateBody.data.item.name,
+        //       }
+        //     }
+        //   }
+        // }
       },
     })
 
+    if (validateBody.data.items && validateBody.data.items.length > 0) {
+    await Promise.all(
+    validateBody.data.items.map(async (item) => {
+      // Check if item already exists, if not, create it
+      const existingItem = await db.item.upsert({
+        where: { id: item.id },
+        update: { name: item.name },
+        create: { id: item.id, name: item.name },
+      });
+
+      // Link item to list using the junction table
+      await db.listOfItems.create({
+        data: {
+          listId: validateBody.data.id,
+          itemId: existingItem.id,
+        },
+      });
+    })
+  );
+}
     return success(res, "List updated successfully", updateList);
   } catch (err) {
     return internalServerError(res);
@@ -213,28 +237,45 @@ export const deleteList = async (req: Request, res: Response) =>  {
 
     if(!list){
       return notFound(res, "List not found");
-    }
+    }   
 
-    // Check related items
     const items = await db.listOfItems.findMany({
       where: {
-        listId: validateId.data.id,
-      }
-    });
-
-    if (items.length > 0) {
-      return conflict(res, "List has related items, please delete the items first");
-    }
-
-    const deleteList = await db.list.delete({
-      where: {
-        id: validateId.data.id,
-      }
+        listId: validateId.data.id
+      },
+      include: {
+            item: {
+              select: {
+                id: true,
+                name: true,
+            }
+          },
+    },
     })
 
-    return success(res, "List deleted successfully", deleteList);
+   const itemsToDelete = items.map(item => ({
+      id: item.item.id,
+      name: item.item.name,
+    })); 
+
+    if(items.length > 0){
+      await db.listOfItems.deleteMany({
+        where: {
+          listId: validateId.data.id
+        }
+      })
+    }
+
+    const deleteList =  await db.list.delete({
+        where: {
+          id: validateId.data.id,
+        }
+      })
+
+    return success(res, "List deleted successfully", {deleteList, deletedItems: itemsToDelete});
   } catch (err) {
     return internalServerError(res);
   }
 }
 
+// Add Item to List

@@ -6,7 +6,7 @@ import ENV from "@/utils/env";
 
 // [IMPORT ROUTES]
 import listRoute from "@/routes/list.route";
-import userRoute from "@/routes/user.route";
+// import userRoute from "@/routes/user.route";
 import itemRoute from "@/routes/item.route";
 
 // import userRouter from './routes/user.router';
@@ -23,7 +23,7 @@ app.use(express.json());
 
 // [USE ROUTES]
 app.use("/list", listRoute);
-app.use("/users", userRoute);
+// app.use("/user", userRoute);
 app.use("/item", itemRoute);
 
 // [TEST ROUTE]
