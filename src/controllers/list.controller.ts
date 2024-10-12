@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import db from "@/services/db";
-import { listSchema, listUpdateSchema } from "@/models/list.model";
+import { deleteItemSchema, listSchema, listUpdateSchema } from "@/models/list.model";
 import { idSchema } from "@/models/id.model";
+import { z } from "zod";
 
 import {
   success,
@@ -15,6 +16,7 @@ import {
   validationError,
   parseZodError,
 } from "@/utils/responses";
+import { itemSchema } from "@/models/item.model";
 
 // Generated ListID 
 async function generateListId() {
@@ -79,9 +81,9 @@ export const getListById = async (req: Request, res: Response) => {
   try {
     const validateId = idSchema.safeParse({ id: Number(req.params.id) });
   
-  if (!validateId.success) {
-    return validationError(res, parseZodError(validateId.error));
-  }
+    if (!validateId.success) {
+      return validationError(res, parseZodError(validateId.error));
+    }
 
   const list = await db.list.findUnique({
     where: {
@@ -103,7 +105,7 @@ export const getListById = async (req: Request, res: Response) => {
   })
 
   if (!list) {
-    return notFound(res, "List not found");
+    return notFound(res, `List with id ${validateId.data.id} not found`);
   }
 
   return success(res, "List fetched successfully", list);
@@ -154,69 +156,92 @@ export const createList = async (req: Request,res: Response) => {
 // Update List
 export const updateList = async (req: Request, res: Response) => {
   try {
+    const validateId = idSchema.safeParse({ id: Number(req.params.id) });
+
+    if (!validateId.success) {
+      return validationError(res, parseZodError(validateId.error));
+    }
+
     const validateBody = listUpdateSchema.safeParse(req.body);
 
-    if(!validateBody.success){
+    if (!validateBody.success) {
       return validationError(res, parseZodError(validateBody.error));
     }
 
     const list = await db.list.findUnique({
-      where: {
-        id: validateBody.data.id,
-      }
+      where: { id: validateId.data.id },
     });
 
-    if (!list){
-      return notFound(res, "List not found");
+    if (!list) {
+      return notFound(res, `List with id ${validateId.data.id} not found`);
     }
 
-    const updateList = await db.list.update({
-      where: {
-        id: validateBody.data.id,
-      },
-      data: {
-        // update nama list
-        name: validateBody.data.name,
+    const updateData: any = {
+      name: validateBody.data.name,
+    };
 
-        // update item (  )
-        // items: {
-        //   create: {
-        //     item: {
-        //       create: {
-        //         id: validateBody.data.item.id,
-        //         name: validateBody.data.item.name,
-        //       }
-        //     }
-        //   }
-        // }
-      },
-    })
-
+    // Jika ada items di dalam request body
     if (validateBody.data.items && validateBody.data.items.length > 0) {
-    await Promise.all(
-    validateBody.data.items.map(async (item) => {
-      // Check if item already exists, if not, create it
-      const existingItem = await db.item.upsert({
-        where: { id: item.id },
-        update: { name: item.name },
-        create: { id: item.id, name: item.name },
-      });
+      // Cek apakah semua item sudah ada di tabel item
+      for (const item of validateBody.data.items) {
+        const existingItem = await db.item.findUnique({
+          where: { id: item.id },
+        });
 
-      // Link item to list using the junction table
-      await db.listOfItems.create({
-        data: {
-          listId: validateBody.data.id,
-          itemId: existingItem.id,
+        if (!existingItem) {
+          return validationError(
+            res,
+            `Item with id ${item.id} does not exist in the items table, please add the item first`
+          );
+        }
+      }
+
+      // Jika semua item valid, lakukan connectOrCreate
+      updateData.items = {
+        connectOrCreate: validateBody.data.items.map((item: any) => ({
+          where: {
+            listId_itemId: {
+              listId: validateId.data.id,
+              itemId: item.id,
+            },
+          },
+          create: {
+            item: {
+              connectOrCreate: {
+                where: { id: item.id },
+                create: { id: item.id, name: item.name },
+              },
+            },
+          },
+        })),
+      };
+    }
+
+    const updatedList = await db.list.update({
+      where: {
+        id: validateId.data.id,
+      },
+      data: updateData,
+      include: {
+        items: {
+          select: {
+            item: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
         },
-      });
-    })
-  );
-}
-    return success(res, "List updated successfully", updateList);
+      },
+    });
+
+    return success(res, "List updated successfully", updatedList);
   } catch (err) {
     return internalServerError(res);
   }
-}
+};
+
 
 // Delete List
 export const deleteList = async (req: Request, res: Response) =>  {
@@ -272,10 +297,47 @@ export const deleteList = async (req: Request, res: Response) =>  {
         }
       })
 
-    return success(res, "List deleted successfully", {deleteList, deletedItems: itemsToDelete});
+    return success(res, "List deleted successfully", {deleteList, itemsRemovedFromList: itemsToDelete});
   } catch (err) {
     return internalServerError(res);
   }
 }
 
-// Add Item to List
+// Delete items in list
+export const deleteItemsInList = async (req: Request, res: Response) => {
+  try {
+    const validateParams = deleteItemSchema.safeParse({
+      listId: Number(req.params.listId),
+      itemId: String(req.params.itemId),
+    });
+
+    if (!validateParams.success) {
+      return validationError(res, parseZodError(validateParams.error));
+    }
+
+    const itemInList = await db.listOfItems.findFirst({
+      where: {
+        listId: validateParams.data.listId,
+        itemId: validateParams.data.itemId,
+      },
+    });
+
+    if (!itemInList) {
+      return notFound(res, "Item not found in the list");
+    }
+
+    const deleteItemInList = await db.listOfItems.delete({
+      where: {
+        listId_itemId: {
+          listId: validateParams.data.listId,
+          itemId: validateParams.data.itemId,
+        },
+      },
+    });
+
+    return success(res, "Item deleted from list successfully", deleteItemInList);
+  } catch (err) {
+    console.error(err);
+    return internalServerError(res);
+  }
+};

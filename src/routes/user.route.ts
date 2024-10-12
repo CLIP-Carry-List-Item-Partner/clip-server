@@ -1,9 +1,12 @@
-// import { Router } from "express";
-// import { getAllUsers } from '@/controllers/auth.controller';
+import { Router } from 'express';
 
-// const router = Router();
+import {
+  googleAuth,
+  googleAuthCallback,
+} from '@/controllers/auth.controller';
 
-// router.get('/all', getAllUsers);
+const router = Router();
+router.get("/", googleAuth);
+router.get("/google/callback", googleAuthCallback);
 
-// export default router;
-
+export default router;

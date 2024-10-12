@@ -8,7 +8,7 @@ export const itemSchema = z.object({
 })
 
 export const itemUpdateSchema = itemSchema.pick({
-  id: true,
+  // id: true,
   name: true,
 })
 

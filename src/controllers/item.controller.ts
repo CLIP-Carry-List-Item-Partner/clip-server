@@ -31,6 +31,7 @@ export const getAllItems = async (req: Request, res: Response) => {
             select: {
               list: {
                 select: {
+                  id: true,
                   name: true,
               }
           }
@@ -72,6 +73,10 @@ export const getItemById = async (req: Request, res: Response) => {
       }
     })
 
+    if(!item) {
+      return notFound(res, `Item with id ${validateId.data.id} not found`)
+    }
+
     return success(res, "Item fetched successfully", item);
 
   } catch (err) {
@@ -90,7 +95,7 @@ export const createItem = async (req: Request, res: Response) => {
 
     const newItem = await db.item.create({
       data: {
-        id: validateItem.data.id,
+        id: validateItem.data.id, //didapat dari hasil scan label dengan CLIP
         name: validateItem.data.name,
       }
     })
@@ -105,27 +110,31 @@ export const createItem = async (req: Request, res: Response) => {
 // Update item
 export const updateItem = async (req: Request, res: Response) => {
   try {
+    const validateId = itemIdSchema.safeParse({id: String(req.params.id)})
+    
+    if(!validateId.success) {
+      return validationError(res, parseZodError(validateId.error))
+    }
+
     const validateItem = itemUpdateSchema.safeParse(req.body)
 
     if(!validateItem.success) {
       return validationError(res, parseZodError(validateItem.error))
     }
 
-    const itemId = req.params.id;
-
     const item = await db.item.findUnique({
       where: {
-        id: itemId,
+        id: validateId.data.id,
       }
     })
 
     if(!item){
-      return notFound(res, "Item not found")
+      return notFound(res, `Item with ${validateId.data.id} not found`)
     }
 
     const updateItem = await db.item.update({
       where: {
-        id: itemId
+        id: validateId.data.id
       },
       data: {
         name: validateItem.data.name

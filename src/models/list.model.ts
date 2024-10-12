@@ -9,10 +9,10 @@ export const listSchema = z.object({
 })
 
 export const listUpdateSchema = listSchema.pick({
-  id: true,
   name: true,
   userId: true,
-}).extend({
+})
+.extend({
     items: z.array(
     z.object({
       id: z.string(),
@@ -21,5 +21,11 @@ export const listUpdateSchema = listSchema.pick({
   ).optional(),
 });
 
+export const deleteItemSchema = z.object({  
+  listId: z.number().int().positive(),
+  itemId: z.string(),
+})
+
 export type List = z.infer<typeof listSchema>
 export type ListUpdate = z.infer<typeof listUpdateSchema>
+export type DeleteItem = z.infer<typeof deleteItemSchema>
