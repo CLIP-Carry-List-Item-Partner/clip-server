@@ -4,10 +4,10 @@ import ENV from "@/utils/env";
 import jwt from "jsonwebtoken";
 import { google } from "googleapis";
 
-// import {
-//   userSchema,
-//   userUpdateSchema,
-// } from "@/models/user.model";
+import {
+  userUpdateSchema,
+} from "@/models/user.model";
+
 
 import {
   internalServerError,
@@ -56,7 +56,7 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
 
     const { data } = await oauth2.userinfo.get();
 
-    if (!data.email || !data.name) {
+    if (!data.email || !data.name ) {
       return unauthorized(res, 'Google authentication failed');
     }
 
@@ -72,7 +72,7 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
         data: {
           email: data.email,
           name: data.name,
-
+          picture: data.picture!,
         },
       });
     }
@@ -80,6 +80,8 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
     const payload = {
       id: user.id,
       email: user.email,
+      name: user.name,
+      picture: data.picture,
     };
 
     const secret = ENV.APP_JWT_SECRET;
@@ -93,8 +95,10 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
     const token = jwt.sign(payload, secret, { expiresIn });
 
     return success(res, "User authenticated", {
+      id: user.id,
       email: user.email,
       name: user.name,
+      picture: data.picture,
       token,
     });
 
@@ -103,4 +107,75 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
   }
 };
 
+// Get all users
+export const getAllUsers = async (req: Request, res: Response) => {
+  try {
+    const users = await db.user.findMany();
 
+    return success(res, "Users fetched successfully", users);
+  } catch (err) {
+    return internalServerError(res);
+  }
+}
+
+// Get user by id
+export const getUserById = async (req: Request, res: Response) => {
+  try {
+    const validateId = req.params.id;
+
+    if (!validateId) {
+      return validationError(res, "Id is required");
+    }
+
+    const user = await db.user.findUnique({
+      where: {
+        id: parseInt(validateId),
+      },
+    });
+
+    return success(res, "User fetched successfully", user);
+  } catch (err) {
+    return internalServerError(res);
+  }
+}
+
+// Update username
+export const updateUser = async (req: Request, res: Response) => {
+  try {
+    const validateId = req.params.id;
+
+    if (!validateId) {
+      return validationError(res, "Id is required");
+    }
+
+    const validateBody = userUpdateSchema.safeParse(req.body);
+
+    if (!validateBody.success) {
+      return validationError(res, parseZodError(validateBody.error));
+    }
+
+    const user = await db.user.findUnique({
+      where: {
+        id: parseInt(validateId),      
+      }
+    })
+
+    if(!user){
+      return notFound (res, `User with id ${parseInt(validateId)} not found`)
+    }
+
+    const updateUser = await db.user.update({
+      where: {
+        id: parseInt(validateId),
+      },
+      data: {
+        name: validateBody.data.name,
+      },
+    });
+
+    return success(res, "User updated successfully", updateUser);
+    
+  } catch (err) {
+    return internalServerError(res);
+  }
+}
