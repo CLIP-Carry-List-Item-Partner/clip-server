@@ -11,5 +11,11 @@ export const userUpdateSchema = userSchema.pick ({
   // email: z.string({ required_error: 'Email is required' }).email(),
 });
 
+export const userLoginSchema = z.object({
+  email: z.string({ required_error: 'Email is required' }).email(),
+})
+
+
 export type User = z.infer<typeof userSchema>;
-export type userUpdate = z.infer<typeof userUpdateSchema>;
+export type UserUpdate = z.infer<typeof userUpdateSchema>;
+export type UserLogin = z.infer<typeof userLoginSchema>;

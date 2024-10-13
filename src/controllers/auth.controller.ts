@@ -3,9 +3,11 @@ import db from "@/services/db";
 import ENV from "@/utils/env";
 import jwt from "jsonwebtoken";
 import { google } from "googleapis";
+import type { JWTModel } from '@/models/auth/jwt.model';
 
 import {
   userUpdateSchema,
+  userLoginSchema,
 } from "@/models/user.model";
 
 
@@ -35,7 +37,8 @@ const authorizationUrl = oauth2Client.generateAuthUrl({
   include_granted_scopes: true,
 })
 
-export const googleAuth = async (req: Request, res: Response) => {
+// Google Auth
+export const googleAuth = async (_req: Request, res: Response) => {
   try {
     res.redirect(authorizationUrl)
   } catch (err) {
@@ -43,11 +46,15 @@ export const googleAuth = async (req: Request, res: Response) => {
   }
 }
 
+// User Login
 export const googleAuthCallback = async (req: Request, res: Response) => {
   try {
     const { code } = req.query;
     const { tokens } = await oauth2Client.getToken(code as string);
+    const accessTokenUrl = `https://oauth2.googleapis.com/token?client_id=${process.env.GOOGLE_CLIENT_ID}&client_secret=${process.env.GOOGLE_CLIENT_SECRET}&code=${code}&grant_type=authorization_code&redirect_uri=http://localhost:4000/auth/google/callback`;
     oauth2Client.setCredentials(tokens);
+
+
 
     const oauth2 = google.oauth2({
       auth: oauth2Client,
@@ -90,22 +97,114 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
       return internalServerError(res);
     }
 
-    const expiresIn = 60 * 60 * 1;
+    const jwtToken = jwt.sign(
+      payload,
+      secret,
+      {
+        expiresIn: '24h',
+      }
+    );
 
-    const token = jwt.sign(payload, secret, { expiresIn });
+    const jwtRefreshToken = jwt.sign(
+      payload,
+      secret,
+      {
+        expiresIn: '7d',
+      }
+    );
 
-    return success(res, "User authenticated", {
+    res.cookie("jwt", jwtToken, {
+      httpOnly: true,
+      secure: ENV.NODE_ENV === 'production',
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    })
+
+    res.cookie("jwtRefresh", jwtRefreshToken, {
+      httpOnly: true,
+      secure: ENV.NODE_ENV === 'production',
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    })
+
+    return success(res, `User authenticated, welcome ${user.name}`, {
       id: user.id,
       email: user.email,
       name: user.name,
       picture: data.picture,
-      token,
-    });
+      // kebutuhan testing
+      tokens,
+      accessTokenUrl,
+    })
 
   } catch (err) {
     return internalServerError(res);
   }
 };
+
+// Refresh token
+export const refreshToken = async (req: Request, res: Response) => {
+  try {
+    if(!req.cookies.jwtRefresh) {
+      res.clearCookie("jwt", {
+        httpOnly: true,
+        secure: ENV.NODE_ENV === 'production',
+      })
+
+      res.clearCookie("jwtRefresh", {
+        httpOnly: true,
+        secure: ENV.NODE_ENV === 'production',
+      })
+      return unauthorized(res, 'Refresh token is required');
+    }
+
+    const data = jwt.verify(
+      req.cookies.jwt_refresh,
+      ENV.APP_JWT_SECRET!,
+      {
+        algorithms: ["HS256"],
+      }
+    ) as JWTModel;
+
+    const user = await db.user.findFirst({
+      where: {
+        email: data.email,
+      },
+    });
+
+    if (!user) {
+      return unauthorized(res, 'User not found');
+    }
+
+    const payload = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    }
+
+    const jwtToken = jwt.sign(
+      payload,
+      ENV.APP_JWT_SECRET!,
+      {
+        expiresIn: '24h',
+      }
+    );
+
+    res.cookie("jwt", jwtToken, {
+      httpOnly: true,
+      secure: ENV.NODE_ENV === 'production',
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+
+    return success(res, 'Token refreshed', {
+      id: user.id,
+      email: user.email,
+      name: user.name
+    });
+  
+  } catch (err) {
+    return internalServerError(res);
+}
+}
+
 
 // Get all users
 export const getAllUsers = async (req: Request, res: Response) => {

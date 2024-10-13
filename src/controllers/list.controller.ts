@@ -131,10 +131,20 @@ export const createList = async (req: Request,res: Response) => {
 
     // nanti perlu dicek lagi, buat controller untuk user dulu
     // untuk testing dulu aja, nanti perlu buat user nya beneran
-    const userId = 1;
+    // const userId = 1;
 
-    if (!userId) {
-      return validationError(res, "User not found");
+    // if (!userId) {
+    //   return validationError(res, "User not found");
+    // }
+
+    const checkUserId = await db.user.findUnique({
+      where: {
+        id: validateBody.data.userId,
+      },
+    });
+
+    if (!checkUserId) {
+      return notFound(res, "User not found");
     }
 
     // Create New List
@@ -142,7 +152,7 @@ export const createList = async (req: Request,res: Response) => {
       data: {
         id: listId,
         name: validateBody.data.name,
-        userId: userId,
+        userId: checkUserId.id,
       },
     
     });
