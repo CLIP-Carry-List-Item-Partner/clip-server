@@ -15,6 +15,7 @@ import {
   internalServerError,
   validationError,
   parseZodError,
+  unauthorized,
 } from "@/utils/responses";
 import { itemSchema } from "@/models/item.model";
 
@@ -35,8 +36,26 @@ async function generateListId() {
 // View All List
 export const getAllList = async (req: Request, res: Response) => {
   try {
-    // Mencari list yang ada di database
+    if (!req.user?.id) {
+      return unauthorized(res, "User not authorized");
+    }
+
+    const userId = req.user.id;
+
+    const user = await db.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user) {
+      return notFound(res, "User not found");
+    }
+
     const lists = await db.list.findMany({
+      where: {
+        userId: userId,
+      },
       include: {
         items: {
           select: {
@@ -58,22 +77,24 @@ export const getAllList = async (req: Request, res: Response) => {
               select: {
                 id: true,
                 name: true,
+              },
             },
           },
-        },
-      });
+        });
 
         return {
           ...list,
-          items: items.map((item) => ({itemId: item.item.id, itemName: item.item.name})),
+          items: items.map((item) => ({ itemId: item.item.id, itemName: item.item.name })),
         };
       })
-    )
+    );
+
     return success(res, "List fetched successfully", listsWithItems);
   } catch (err) {
     return internalServerError(res);
   }
 };
+
 
 
 // Get specific List by ID
@@ -117,6 +138,20 @@ export const getListById = async (req: Request, res: Response) => {
 // Create List
 export const createList = async (req: Request,res: Response) => {
   try {
+    if (!req.user?.id) {
+      return unauthorized(res, "User not authorized");
+    }
+
+    const checkUserId = await db.user.findUnique({
+      where: {
+        id: req.user!.id,
+      },
+    });
+
+    if (!checkUserId) {
+      return notFound(res, "User not found");
+    }
+
     const validateBody = listSchema.safeParse(req.body);
 
     if(!validateBody.success) {
@@ -127,24 +162,6 @@ export const createList = async (req: Request,res: Response) => {
 
     if (!listId){
       return internalServerError(res)
-    }
-
-    // nanti perlu dicek lagi, buat controller untuk user dulu
-    // untuk testing dulu aja, nanti perlu buat user nya beneran
-    // const userId = 1;
-
-    // if (!userId) {
-    //   return validationError(res, "User not found");
-    // }
-
-    const checkUserId = await db.user.findUnique({
-      where: {
-        id: validateBody.data.userId,
-      },
-    });
-
-    if (!checkUserId) {
-      return notFound(res, "User not found");
     }
 
     // Create New List
@@ -166,26 +183,38 @@ export const createList = async (req: Request,res: Response) => {
 // Update List
 export const updateList = async (req: Request, res: Response) => {
   try {
-    const validateId = idSchema.safeParse({ id: Number(req.params.id) });
+    // Memastikan user sudah terautentikasi (req.user diambil dari JWT)
+    if (!req.user?.id) {
+      return unauthorized(res, "User not authorized");
+    }
 
+    const userId = req.user.id; // Mengambil userId dari token JWT
+
+    // Validasi ID list
+    const validateId = idSchema.safeParse({ id: Number(req.params.id) });
     if (!validateId.success) {
       return validationError(res, parseZodError(validateId.error));
     }
 
+    // Validasi body request
     const validateBody = listUpdateSchema.safeParse(req.body);
-
     if (!validateBody.success) {
       return validationError(res, parseZodError(validateBody.error));
     }
 
+    // Cari list berdasarkan id dan userId yang login
     const list = await db.list.findUnique({
-      where: { id: validateId.data.id },
+      where: { 
+        id: validateId.data.id,
+        userId: userId, // Filter berdasarkan userId dari pengguna yang sedang login
+      },
     });
 
     if (!list) {
-      return notFound(res, `List with id ${validateId.data.id} not found`);
+      return notFound(res, `List with id ${validateId.data.id} not found or you don't have permission to update it`);
     }
 
+    // Siapkan data untuk di-update
     const updateData: any = {
       name: validateBody.data.name,
     };
@@ -227,6 +256,7 @@ export const updateList = async (req: Request, res: Response) => {
       };
     }
 
+    // Update list
     const updatedList = await db.list.update({
       where: {
         id: validateId.data.id,
@@ -256,6 +286,23 @@ export const updateList = async (req: Request, res: Response) => {
 // Delete List
 export const deleteList = async (req: Request, res: Response) =>  {
   try {
+    if(!req.user?.id){
+      return unauthorized(res, "User not authorized");
+    }
+
+    const userId = req.user.id;
+
+    // apakah ini perlu?
+    const checkUserId = await db.user.findUnique({
+      where: {
+        id: userId,
+      }
+    })
+
+    if(!checkUserId){
+      return notFound(res, "User not found");
+    }
+
     const validateId = idSchema.safeParse({
       id: Number(req.params.id),
     });
@@ -267,6 +314,7 @@ export const deleteList = async (req: Request, res: Response) =>  {
     const list = await db.list.findUnique({
       where: {
         id: validateId.data.id,
+        userId: userId,
       }
     })
 
@@ -316,6 +364,22 @@ export const deleteList = async (req: Request, res: Response) =>  {
 // Delete items in list
 export const deleteItemsInList = async (req: Request, res: Response) => {
   try {
+    if (!req.user?.id) {
+      return unauthorized(res, "User not authorized");
+    }
+
+    const userId = req.user.id;
+
+    const checkUserId = await db.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!checkUserId) {
+      return notFound(res, "User not found");
+    }
+
     const validateParams = deleteItemSchema.safeParse({
       listId: Number(req.params.listId),
       itemId: String(req.params.itemId),

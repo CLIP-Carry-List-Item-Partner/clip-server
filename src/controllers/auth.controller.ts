@@ -8,6 +8,7 @@ import type { JWTModel } from '@/models/auth/jwt.model';
 import {
   userUpdateSchema,
   userLoginSchema,
+  userSchema,
 } from "@/models/user.model";
 
 
@@ -49,12 +50,17 @@ export const googleAuth = async (_req: Request, res: Response) => {
 // User Login
 export const googleAuthCallback = async (req: Request, res: Response) => {
   try {
-    const { code } = req.query;
+    const { code, grant_type, error } = req.query;
+
+
+    // nanti implementasi kalau udah jadi frontendnya
+    // if (error) {
+    //   return res.redirect("/login");
+    // }
+
     const { tokens } = await oauth2Client.getToken(code as string);
-    const accessTokenUrl = `https://oauth2.googleapis.com/token?client_id=${process.env.GOOGLE_CLIENT_ID}&client_secret=${process.env.GOOGLE_CLIENT_SECRET}&code=${code}&grant_type=authorization_code&redirect_uri=http://localhost:4000/auth/google/callback`;
+    const accessTokenUrl = `https://oauth2.googleapis.com/token?client_id=${process.env.GOOGLE_CLIENT_ID}&client_secret=${process.env.GOOGLE_CLIENT_SECRET}&code=${code}&grant_type=${grant_type}&redirect_uri=http://localhost:4000/auth/google/callback`;
     oauth2Client.setCredentials(tokens);
-
-
 
     const oauth2 = google.oauth2({
       auth: oauth2Client,
@@ -135,7 +141,11 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
       accessTokenUrl,
     })
 
+    // nanti pakai yang ini
+    // return res.redirect(process.env.APP_FRONTEND_URL!);
+
   } catch (err) {
+    console.log(err);
     return internalServerError(res);
   }
 };
@@ -274,6 +284,57 @@ export const updateUser = async (req: Request, res: Response) => {
 
     return success(res, "User updated successfully", updateUser);
     
+  } catch (err) {
+    return internalServerError(res);
+  }
+}
+
+// User Profile
+export const userProfile = async (req: Request, res: Response)=> {
+  try {
+    if (!req.user) {
+      return unauthorized(res, "User not found");
+    }
+
+    return success(res, "User profile fetched successfully", req.user);
+  } catch (err) {
+    return internalServerError(res);
+  }
+}
+
+// Profile Update
+export const profileUpdate = async (req: Request, res: Response)=> {
+  try {
+    if (!req.user) {
+      return unauthorized(res, "User not found");
+    }
+
+    const validateBody = userUpdateSchema.safeParse(req.body);
+
+    if (!validateBody.success) {
+      return validationError(res, parseZodError(validateBody.error));
+    }
+
+    const userExist = await db.user.findFirst({
+      where: {
+        email: req.user.email,
+      },
+    })
+
+    if (!userExist) {
+      return notFound(res, "User not found");
+    }
+
+    const updateUser = await db.user.update({
+      where: {
+        id: req.user.id,
+      },
+      data: {
+        name: validateBody.data.name,
+      },
+    });
+
+    return success(res, "User updated successfully", updateUser);
   } catch (err) {
     return internalServerError(res);
   }

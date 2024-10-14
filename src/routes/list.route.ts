@@ -7,13 +7,14 @@ import {
   deleteList,
   deleteItemsInList,
 } from '@/controllers/list.controller';
+import verifyJwt  from '@/middlewares/verifyJwt.middleware';
 
 const router = Router();
-router.get("/", getAllList);
-router.get("/:id", getListById);
-router.post("/create", createList);
-router.put("/update/:id", updateList);
-router.delete("/delete/:id", deleteList);
-router.delete("/delete/:listId/item/:itemId", deleteItemsInList);
+router.get("/", verifyJwt,getAllList);
+router.get("/:id", verifyJwt, getListById);
+router.post("/create", verifyJwt, createList);
+router.put("/update/:id",  verifyJwt, updateList);
+router.delete("/delete/:id", verifyJwt, deleteList);
+router.delete("/delete/:listId/item/:itemId", verifyJwt, deleteItemsInList);
 
 export default router;

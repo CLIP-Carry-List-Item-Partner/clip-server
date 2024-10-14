@@ -1,16 +1,16 @@
 import { z } from 'zod';
 
 export const listSchema = z.object({
-  id: z.number().int().positive(),
+  // id: z.number().int().positive(),
   name: z.string().min(3).max(255),
   createdAt: z.date().default(() => new Date()),
   updatedAt: z.date().default(() => new Date()),
-  userId: z.number().int().positive(),
+  // userId: z.number().int().positive(),
 })
 
 export const listUpdateSchema = listSchema.pick({
   name: true,
-  userId: true,
+  // userId: true,
 })
 .extend({
     items: z.array(
