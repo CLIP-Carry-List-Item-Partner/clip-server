@@ -9,7 +9,7 @@ const verifyJwt = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const jwtToken = req.cookies.jwt as string | undefined;
 
-    console.log("Received JWT Token:", jwtToken); // Debug line
+    console.log("Received JWT Token:", jwtToken);
 
     if (!jwtToken) {
       return unauthorized(res, "Invalid session: JWT token not found");
@@ -17,7 +17,7 @@ const verifyJwt = async (req: Request, res: Response, next: NextFunction) => {
 
     const jwtData = jwt.verify(jwtToken, ENV.APP_JWT_SECRET!) as JWTModel;
 
-    console.log("Decoded JWT Data:", jwtData); // Debug line
+    console.log("Decoded JWT Data:", jwtData);
 
     const user = await db.user.findUnique({
       where: {

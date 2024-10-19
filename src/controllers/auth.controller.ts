@@ -296,7 +296,13 @@ export const userProfile = async (req: Request, res: Response)=> {
       return unauthorized(res, "User not found");
     }
 
-    return success(res, "User profile fetched successfully", req.user);
+    const user = await db.user.findFirst({
+      where: {
+        email: req.user.email,
+      },
+    });
+
+    return success(res, "User profile fetched successfully", user);
   } catch (err) {
     return internalServerError(res);
   }

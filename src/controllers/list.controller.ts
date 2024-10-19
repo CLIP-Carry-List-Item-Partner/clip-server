@@ -2,7 +2,6 @@ import type { Request, Response } from "express";
 import db from "@/services/db";
 import { deleteItemSchema, listSchema, listUpdateSchema } from "@/models/list.model";
 import { idSchema } from "@/models/id.model";
-import { z } from "zod";
 
 import {
   success,
@@ -17,7 +16,6 @@ import {
   parseZodError,
   unauthorized,
 } from "@/utils/responses";
-import { itemSchema } from "@/models/item.model";
 
 // Generated ListID 
 async function generateListId() {
@@ -41,16 +39,6 @@ export const getAllList = async (req: Request, res: Response) => {
     }
 
     const userId = req.user.id;
-
-    const user = await db.user.findUnique({
-      where: {
-        id: userId,
-      },
-    });
-
-    if (!user) {
-      return notFound(res, "User not found");
-    }
 
     const lists = await db.list.findMany({
       where: {
@@ -96,10 +84,15 @@ export const getAllList = async (req: Request, res: Response) => {
 };
 
 
-
 // Get specific List by ID
 export const getListById = async (req: Request, res: Response) => {
   try {
+    if (!req.user?.id) {
+      return unauthorized(res, "User not authorized");
+    }
+
+    const userId = req.user.id;
+
     const validateId = idSchema.safeParse({ id: Number(req.params.id) });
   
     if (!validateId.success) {
@@ -109,6 +102,7 @@ export const getListById = async (req: Request, res: Response) => {
   const list = await db.list.findUnique({
     where: {
       id: validateId.data.id,
+      userId: userId,
     },
     include: {
       items: {
@@ -142,15 +136,7 @@ export const createList = async (req: Request,res: Response) => {
       return unauthorized(res, "User not authorized");
     }
 
-    const checkUserId = await db.user.findUnique({
-      where: {
-        id: req.user!.id,
-      },
-    });
-
-    if (!checkUserId) {
-      return notFound(res, "User not found");
-    }
+    const userId = req.user.id;
 
     const validateBody = listSchema.safeParse(req.body);
 
@@ -164,12 +150,11 @@ export const createList = async (req: Request,res: Response) => {
       return internalServerError(res)
     }
 
-    // Create New List
     const list = await db.list.create({
       data: {
         id: listId,
         name: validateBody.data.name,
-        userId: checkUserId.id,
+        userId: userId,
       },
     
     });
@@ -183,105 +168,84 @@ export const createList = async (req: Request,res: Response) => {
 // Update List
 export const updateList = async (req: Request, res: Response) => {
   try {
-    // Memastikan user sudah terautentikasi (req.user diambil dari JWT)
     if (!req.user?.id) {
       return unauthorized(res, "User not authorized");
     }
 
-    const userId = req.user.id; // Mengambil userId dari token JWT
+    const userId = req.user.id;
 
-    // Validasi ID list
-    const validateId = idSchema.safeParse({ id: Number(req.params.id) });
+    const validateId = idSchema.safeParse({
+      id: Number(req.params.id),
+    });
+
     if (!validateId.success) {
       return validationError(res, parseZodError(validateId.error));
     }
 
-    // Validasi body request
     const validateBody = listUpdateSchema.safeParse(req.body);
+
     if (!validateBody.success) {
       return validationError(res, parseZodError(validateBody.error));
     }
 
-    // Cari list berdasarkan id dan userId yang login
     const list = await db.list.findUnique({
-      where: { 
+      where: {
         id: validateId.data.id,
-        userId: userId, // Filter berdasarkan userId dari pengguna yang sedang login
+        userId: userId,
+      },
+      include: {
+        items: true, // Include current items in the list
       },
     });
 
     if (!list) {
-      return notFound(res, `List with id ${validateId.data.id} not found or you don't have permission to update it`);
+      return notFound(res, `List with id ${validateId.data.id} not found`);
     }
 
-    // Siapkan data untuk di-update
-    const updateData: any = {
-      name: validateBody.data.name,
-    };
-
-    // Jika ada items di dalam request body
-    if (validateBody.data.items && validateBody.data.items.length > 0) {
-      // Cek apakah semua item sudah ada di tabel item
-      for (const item of validateBody.data.items) {
-        const existingItem = await db.item.findUnique({
-          where: { id: item.id },
-        });
-
-        if (!existingItem) {
-          return validationError(
-            res,
-            `Item with id ${item.id} does not exist in the items table, please add the item first`
-          );
-        }
-      }
-
-      // Jika semua item valid, lakukan connectOrCreate
-      updateData.items = {
-        connectOrCreate: validateBody.data.items.map((item: any) => ({
-          where: {
-            listId_itemId: {
-              listId: validateId.data.id,
-              itemId: item.id,
-            },
-          },
-          create: {
-            item: {
-              connectOrCreate: {
-                where: { id: item.id },
-                create: { id: item.id, name: item.name },
-              },
-            },
-          },
-        })),
-      };
-    }
-
-    // Update list
+    // Update list name
     const updatedList = await db.list.update({
       where: {
         id: validateId.data.id,
       },
-      data: updateData,
-      include: {
-        items: {
-          select: {
-            item: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
+      data: {
+        name: validateBody.data.name,
       },
     });
 
+    // If items are provided, update the ListOfItems table
+    if (validateBody.data.items) {
+      const existingItems = list.items.map(item => item.itemId);
+      const newItems = validateBody.data.items.map(item => item.id);
+
+      // Add new items to the list
+      const itemsToAdd = newItems.filter(itemId => !existingItems.includes(itemId));
+      for (const itemId of itemsToAdd) {
+        const item = await db.item.findUnique({
+          where: {
+            id: itemId,
+          },
+        });
+
+        if (!item) {
+          return notFound(res, `Item with id ${itemId} not found, please create the item first`);
+        }
+
+        await db.listOfItems.create({
+          data: {
+            listId: validateId.data.id,
+            itemId,
+            userId, // Assuming userId is also needed here
+          },
+        });
+      }
+    }
+
     return success(res, "List updated successfully", updatedList);
   } catch (err) {
+    console.error("Error:", err);
     return internalServerError(res);
   }
 };
-
 
 // Delete List
 export const deleteList = async (req: Request, res: Response) =>  {
@@ -291,17 +255,6 @@ export const deleteList = async (req: Request, res: Response) =>  {
     }
 
     const userId = req.user.id;
-
-    // apakah ini perlu?
-    const checkUserId = await db.user.findUnique({
-      where: {
-        id: userId,
-      }
-    })
-
-    if(!checkUserId){
-      return notFound(res, "User not found");
-    }
 
     const validateId = idSchema.safeParse({
       id: Number(req.params.id),
@@ -336,7 +289,7 @@ export const deleteList = async (req: Request, res: Response) =>  {
     },
     })
 
-   const itemsToDelete = items.map(item => ({
+  const itemsToDelete = items.map(item => ({
       id: item.item.id,
       name: item.item.name,
     })); 
@@ -370,16 +323,6 @@ export const deleteItemsInList = async (req: Request, res: Response) => {
 
     const userId = req.user.id;
 
-    const checkUserId = await db.user.findUnique({
-      where: {
-        id: userId,
-      },
-    });
-
-    if (!checkUserId) {
-      return notFound(res, "User not found");
-    }
-
     const validateParams = deleteItemSchema.safeParse({
       listId: Number(req.params.listId),
       itemId: String(req.params.itemId),
@@ -393,7 +336,8 @@ export const deleteItemsInList = async (req: Request, res: Response) => {
       where: {
         listId: validateParams.data.listId,
         itemId: validateParams.data.itemId,
-      },
+        userId: userId,
+      }
     });
 
     if (!itemInList) {

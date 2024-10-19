@@ -9,8 +9,8 @@ export const listSchema = z.object({
 })
 
 export const listUpdateSchema = listSchema.pick({
-  name: true,
   // userId: true,
+  name: true,
 })
 .extend({
     items: z.array(

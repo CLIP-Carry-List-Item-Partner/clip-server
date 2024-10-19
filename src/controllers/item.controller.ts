@@ -21,44 +21,30 @@ import {
 // Get all items)
 export const getAllItems = async (req: Request, res: Response) => {
   try {
-    // Memastikan user sudah terautentikasi (req.user diambil dari JWT)
     if (!req.user?.id) {
       return unauthorized(res, "User not authorized");
     }
 
-    const userId = req.user.id; // Mengambil userId dari token JWT
+    const userId = req.user.id;
 
-    // Mencari semua item yang terkait dengan list milik user yang sedang login
     const items = await db.item.findMany({
       where: {
-        lists: {
-          some: {
-            list: {
-              userId: userId, // Filter berdasarkan userId dari pengguna yang sedang login
-            },
-          },
-        },
+        userId: userId,
       },
-      select: {
-        id: true,
-        name: true,
-        createdAt: true,
-        updatedAt: true,
+      include: {
         lists: {
           select: {
             list: {
               select: {
                 id: true,
                 name: true,
-                userId: true,
-              },
+              }
             },
           },
         },
-      },
-    });
-
-    // Mengembalikan item yang ditemukan
+      }
+    })
+    
     return success(res, "Items fetched successfully", items);
   } catch (err) {
     return internalServerError(res);
@@ -69,58 +55,48 @@ export const getAllItems = async (req: Request, res: Response) => {
 // Get item by id
 export const getItemById = async (req: Request, res: Response) => {
   try {
-    // Memastikan user sudah terautentikasi (req.user diambil dari JWT)
     if (!req.user?.id) {
       return unauthorized(res, "User not authorized");
     }
 
-    const userId = req.user.id; // Mengambil userId dari token JWT
+    const userId = req.user.id;
 
-    // Validasi id item
     const validateId = itemIdSchema.safeParse({ id: String(req.params.id) });
+
     if (!validateId.success) {
       return validationError(res, parseZodError(validateId.error));
     }
 
-    // Mencari item berdasarkan id dan memastikan item terkait dengan list milik user yang login
-    const item = await db.item.findUnique({
+    const item =  await db.item.findUnique({
       where: {
         id: validateId.data.id,
+        userId: userId,
       },
       include: {
         lists: {
           select: {
             list: {
               select: {
+                id: true,
                 name: true,
-                userId: true, // Tambahkan userId untuk validasi
-              },
+              }
             },
-          },
+          }
         },
-      },
-    });
+      }
+    })
 
-    // Jika item tidak ditemukan
     if (!item) {
       return notFound(res, `Item with id ${validateId.data.id} not found`);
     }
 
-    // Memastikan item terkait dengan list milik user yang sedang login
-    const isUserAuthorized = item.lists.some((listRelation) => listRelation.list.userId === userId);
-    if (!isUserAuthorized) {
-      return unauthorized(res, "User not authorized to access this item");
-    }
-
-    // Mengembalikan item yang valid dan sesuai dengan user yang login
     return success(res, "Item fetched successfully", item);
   } catch (err) {
     return internalServerError(res);
   }
 };
 
-
-// Create item (ini masih salah)
+// Create Item
 export const createItem = async (req: Request, res: Response) => {
   try {
     if (!req.user?.id) {
@@ -129,34 +105,21 @@ export const createItem = async (req: Request, res: Response) => {
 
     const userId = req.user.id;
 
-    // Validasi input item
     const validateItem = itemSchema.safeParse(req.body);
 
     if (!validateItem.success) {
       return validationError(res, parseZodError(validateItem.error));
     }
 
-    // Validasi apakah list terkait dengan user yang sedang login
-    const list = await db.list.findFirst({
-      where: {
-        id: validateItem.data.listId, // Pastikan listId ada di input
+    const newItem = await db.item.create({
+      data: {
+        id: validateItem.data.id,
+        name: validateItem.data.name,
         userId: userId,
       },
     });
 
-    if (!list) {
-      return notFound(res, `List with id ${validateItem.data.listId} not found for this user`);
-    }
-
-    // Membuat item baru
-    const newItem = await db.item.create({
-      data: {
-        id: validateItem.data.id, // didapat dari hasil scan label dengan CLIP
-        name: validateItem.data.name,
-      },
-    });
-
-    return success(res, "Item created and linked to list successfully", newItem);
+    return success(res, "Item created successfully", newItem);
 
   } catch (err) {
     return internalServerError(res);
@@ -167,31 +130,28 @@ export const createItem = async (req: Request, res: Response) => {
 // Update item
 export const updateItem = async (req: Request, res: Response) => {
   try {
-    // Validasi ID item
-    const validateId = itemIdSchema.safeParse({id: String(req.params.id)});
-    
-    if (!validateId.success) {
-      return validationError(res, parseZodError(validateId.error));
-    }
-
-    // Validasi data item yang akan diupdate
-    const validateItem = itemUpdateSchema.safeParse(req.body);
-
-    if (!validateItem.success) {
-      return validationError(res, parseZodError(validateItem.error));
-    }
-
-    // Pastikan user sudah login
     if (!req.user?.id) {
       return unauthorized(res, "User not authorized");
     }
 
     const userId = req.user.id;
 
-    // Cari item di database berdasarkan ID
+    const validateId = itemIdSchema.safeParse({id: String(req.params.id)});
+    
+    if (!validateId.success) {
+      return validationError(res, parseZodError(validateId.error));
+    }
+
+    const validateItem = itemUpdateSchema.safeParse(req.body);
+
+    if (!validateItem.success) {
+      return validationError(res, parseZodError(validateItem.error));
+    }
+
     const item = await db.item.findUnique({
       where: {
         id: validateId.data.id,
+        userId: userId,
       },
     });
 
@@ -199,24 +159,6 @@ export const updateItem = async (req: Request, res: Response) => {
       return notFound(res, `Item with id ${validateId.data.id} not found`);
     }
 
-    // Validasi apakah item tersebut terkait dengan list milik user yang sedang login
-    const listOfItems = await db.listOfItems.findFirst({
-      where: {
-        itemId: item.id,
-        list: {
-          userId: userId, // Memastikan list yang terkait dimiliki oleh user
-        },
-      },
-      include: {
-        list: true,
-      },
-    });
-
-    if (!listOfItems) {
-      return unauthorized(res, "You do not have permission to update this item");
-    }
-
-    // Update item
     const updatedItem = await db.item.update({
       where: {
         id: validateId.data.id,
@@ -237,6 +179,12 @@ export const updateItem = async (req: Request, res: Response) => {
 // Delete Item
 export const deleteItem = async(req: Request, res: Response) => {
   try {
+    if(!req.user?.id){
+      return unauthorized(res, "User not authorized")
+    };
+
+      const userId = req.user?.id
+
     const validateItem = itemIdSchema.safeParse({
       id: String(req.params.id)
     });
@@ -248,6 +196,7 @@ export const deleteItem = async(req: Request, res: Response) => {
     const item = await db.item.findUnique({
       where: {
         id: validateItem.data.id,
+        userId: userId
       }
     })
 
@@ -294,63 +243,63 @@ export const deleteItem = async(req: Request, res: Response) => {
 }
 
 
-// Add Item to List
-export const addItemToList = async (req: Request, res: Response) => {
-  try {
-    const { listId, itemId } = req.body;
+// // Add Item to List (ini nanti dulu aja)
+// export const addItemToList = async (req: Request, res: Response) => {
+//   try {
+//     const { listId, itemId } = req.body;
 
-    if (!listId || !itemId) {
-      return validationError(res, "listId and itemId are required");
-    }
+//     if (!listId || !itemId) {
+//       return validationError(res, "listId and itemId are required");
+//     }
 
-    // Cek list
-    const list = await db.list.findUnique({
-      where: {
-        id: listId,
-      },
-    });
+//     // Cek list
+//     const list = await db.list.findUnique({
+//       where: {
+//         id: listId,
+//       },
+//     });
 
-    if (!list) {
-      return notFound(res, "List not found");
-    }
+//     if (!list) {
+//       return notFound(res, "List not found");
+//     }
 
-    // Cek item
-    const item = await db.item.findUnique({
-      where: {
-        id: itemId,
-      },
-    });
+//     // Cek item
+//     const item = await db.item.findUnique({
+//       where: {
+//         id: itemId,
+//       },
+//     });
 
-    if (!item) {
-      return notFound(res, "Item not found");
-    }
+//     if (!item) {
+//       return notFound(res, "Item not found");
+//     }
 
-    // Cek apakah relasi sudah ada
-    const existingRelation = await db.listOfItems.findUnique({
-      where: {
-        listId_itemId: {
-          listId: listId,
-          itemId: itemId,
-        },
-      },
-    });
+//     // Cek apakah relasi sudah ada
+//     const existingRelation = await db.listOfItems.findUnique({
+//       where: {
+//         listId_itemId: {
+//           listId: listId,
+//           itemId: itemId,
+//         },
+//       },
+//     });
 
-    if (existingRelation) {
-      return conflict(res, "Item already exists in the list");
-    }
+//     if (existingRelation) {
+//       return conflict(res, "Item already exists in the list");
+//     }
 
-    // Buat relasi baru di tabel
-    const newRelation = await db.listOfItems.create({
-      data: {
-        listId: listId,
-        itemId: itemId,
-      },
-    });
+//     // Buat relasi baru di tabel
+//     const newRelation = await db.listOfItems.create({
+//       data: {
+//         listId: listId,
+//         itemId: itemId,
+//       },
+//     });
 
-    return success(res, "Item added to list successfully", newRelation);
-  } catch (err) {
-    console.error(err);
-    return internalServerError(res);
-  }
-};
+//     return success(res, "Item added to list successfully", newRelation);
+//   } catch (err) {
+//     console.error(err);
+//     return internalServerError(res);
+//   }
+// };
 

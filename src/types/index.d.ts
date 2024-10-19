@@ -4,6 +4,11 @@ declare namespace Express{
       id: number;
       name: string;
       email: string;
+    };
+
+    cookies: {
+      jwt: string;
+      jwtRefresh: string;
     }
   }
 }
