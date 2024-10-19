@@ -5,27 +5,23 @@ import express, {
 } from 'express'; 
 import ENV from "@/utils/env";
 import cors from 'cors';
-
 import cookieParser from 'cookie-parser'; 
+import { badRequest, notFound } from "@/utils/responses";
 
 // [IMPORT ROUTES]
+import indexRoute from "@/routes/index.route";
 import listRoute from "@/routes/list.route";
 import authRoute from "@/routes/auth.route";
 import itemRoute from "@/routes/item.route";
-import { badRequest, notFound } from "@/utils/responses";
 
 const app = express();
 
-
 const allowedOrigins = [
-  "http://localhost:4000", // dev client
-  "https://oauth.pstmn.io" // Postman
-  // "https://onlyjun.xyz", // testing
+  "https://oauth.pstmn.io", // postman
+  "http://localhost:5173" // dev client
 ];
 
-
-
-// [USE COOKIE PARSER]
+// [COOKIE PARSER]
 app.use(cookieParser());
 app.use(
   cors({
@@ -36,10 +32,9 @@ app.use(
         callback(new Error("Not allowed by CORS"));
       }
     },
-    credentials: true, // Allow credentials to be sent with requests
+    credentials: true,
   })
 );
-
 
 app.use(express.json());
 
@@ -51,6 +46,7 @@ app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
 });
 
 // [USE ROUTES]
+app.use("/", indexRoute);
 app.use("/list", listRoute);
 app.use("/auth", authRoute);
 app.use("/item", itemRoute);
@@ -58,11 +54,6 @@ app.use("/item", itemRoute);
 // [404]
 app.all("*", (_req: Request, res: Response) => {
   return notFound(res, "Route not found");
-});
-
-// [TEST ROUTE]
-app.get("/test", (req: Request, res: Response) => {
-  res.json({message: "Hello World"}).status(200);
 });
 
 app.listen(ENV.APP_PORT, () => {
