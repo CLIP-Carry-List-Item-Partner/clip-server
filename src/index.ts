@@ -18,20 +18,14 @@ const app = express();
 
 const allowedOrigins = [
   "https://oauth.pstmn.io", // postman
-  "http://localhost:5173" // dev client
+  "https://localhost:5173" // dev client
 ];
 
 // [COOKIE PARSER]
 app.use(cookieParser());
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
+    origin: allowedOrigins,
     credentials: true,
   })
 );
@@ -47,8 +41,8 @@ app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
 
 // [USE ROUTES]
 app.use("/", indexRoute);
-app.use("/list", listRoute);
 app.use("/auth", authRoute);
+app.use("/list", listRoute);
 app.use("/item", itemRoute);
 
 // [404]

@@ -24,7 +24,7 @@ import {
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  'http://localhost:4000/auth/google/callback'
+  'http://localhost:8080/auth/google/callback'
 )
 
 const userScopes = [
@@ -50,16 +50,10 @@ export const googleAuth = async (_req: Request, res: Response) => {
 // User Login
 export const googleAuthCallback = async (req: Request, res: Response) => {
   try {
-    const { code, grant_type, error } = req.query;
-
-
-    // nanti implementasi kalau udah jadi frontendnya
-    // if (error) {
-    //   return res.redirect("/login");
-    // }
+    const { code } = req.query;
 
     const { tokens } = await oauth2Client.getToken(code as string);
-    const accessTokenUrl = `https://oauth2.googleapis.com/token?client_id=${process.env.GOOGLE_CLIENT_ID}&client_secret=${process.env.GOOGLE_CLIENT_SECRET}&code=${code}&grant_type=${grant_type}&redirect_uri=http://localhost:4000/auth/google/callback`;
+    // const accessTokenUrl = `https://oauth2.googleapis.com/token?client_id=${process.env.GOOGLE_CLIENT_ID}&client_secret=${process.env.GOOGLE_CLIENT_SECRET}&code=${code}&grant_type=${grant_type}&redirect_uri=http://localhost:4000/auth/google/callback`;
     oauth2Client.setCredentials(tokens);
 
     const oauth2 = google.oauth2({
@@ -121,28 +115,32 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
 
     res.cookie("jwt", jwtToken, {
       httpOnly: true,
-      secure: ENV.NODE_ENV === 'production',
+      secure: true,
+      sameSite: 'none',
+      // partitioned: true,
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
 
     res.cookie("jwtRefresh", jwtRefreshToken, {
       httpOnly: true,
-      secure: ENV.NODE_ENV === 'production',
+      secure: true,
+      sameSite: 'none',
+      // partitioned: true,
       expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     })
 
-    return success(res, `User authenticated, welcome ${user.name}`, {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      picture: data.picture,
-      // kebutuhan testing
-      tokens,
-      accessTokenUrl,
-    })
+    // return success(res, `User authenticated, welcome ${user.name}`, {
+    //   id: user.id,
+    //   email: user.email,
+    //   name: user.name,
+    //   picture: data.picture,
+    //   // kebutuhan testing
+    //   // tokens,
+    //   // accessTokenUrl,
+    // })
 
     // nanti pakai yang ini
-    // return res.redirect(process.env.APP_FRONTEND_URL!);
+    return res.redirect(`${process.env.APP_FRONTEND_URL}`);
 
   } catch (err) {
     console.log(err);
@@ -156,12 +154,16 @@ export const refreshToken = async (req: Request, res: Response) => {
     if(!req.cookies.jwtRefresh) {
       res.clearCookie("jwt", {
         httpOnly: true,
-        secure: ENV.NODE_ENV === 'production',
+        secure: true,
+        sameSite: 'none',
+        // partitioned: true,
       })
 
       res.clearCookie("jwtRefresh", {
         httpOnly: true,
-        secure: ENV.NODE_ENV === 'production',
+        secure: true,
+        sameSite: 'none',
+        // partitioned: true,
       })
       return unauthorized(res, 'Refresh token is required');
     }
@@ -200,7 +202,9 @@ export const refreshToken = async (req: Request, res: Response) => {
 
     res.cookie("jwt", jwtToken, {
       httpOnly: true,
-      secure: ENV.NODE_ENV === 'production',
+      secure: true,
+      sameSite: 'none',
+      // partitioned: true,
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
@@ -344,4 +348,23 @@ export const profileUpdate = async (req: Request, res: Response)=> {
   } catch (err) {
     return internalServerError(res);
   }
+}
+
+// Logout
+export const logout = async (req: Request, res: Response) => {
+    res.clearCookie("jwt", {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      // partitioned: true,
+    })
+
+    res.clearCookie("jwtRefresh", {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      // partitioned: true,
+    })
+
+    return success(res, "Logout successfully");
 }
