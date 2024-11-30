@@ -111,6 +111,16 @@ export const createItem = async (req: Request, res: Response) => {
       return validationError(res, parseZodError(validateItem.error));
     }
 
+    const existingItem = await db.item.findUnique({
+      where: {
+        id: validateItem.data.id,
+      },
+    });
+
+    if (existingItem) {
+      return conflict(res, "Item already exists");
+    }
+
     const newItem = await db.item.create({
       data: {
         id: validateItem.data.id,

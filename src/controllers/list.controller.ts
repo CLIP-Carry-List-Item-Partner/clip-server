@@ -119,9 +119,9 @@ export const getListById = async (req: Request, res: Response) => {
   },
   })
 
-  if (!list) {
-    return notFound(res, `List with id ${validateId.data.id} not found`);
-  }
+  // if (!list) {
+  //   return notFound(res, `List with id ${validateId.data.id} not found`);
+  // }
 
   return success(res, "List fetched successfully", list);
   } catch (err) {
@@ -202,7 +202,7 @@ export const updateList = async (req: Request, res: Response) => {
       return notFound(res, `List with id ${validateId.data.id} not found`);
     }
 
-    // Update list name
+    // Update list name (this should happen regardless of whether items are provided)
     const updatedList = await db.list.update({
       where: {
         id: validateId.data.id,
@@ -213,7 +213,7 @@ export const updateList = async (req: Request, res: Response) => {
     });
 
     // If items are provided, update the ListOfItems table
-    if (validateBody.data.items) {
+    if (validateBody.data.items && validateBody.data.items.length > 0) {
       const existingItems = list.items.map(item => item.itemId);
       const newItems = validateBody.data.items.map(item => item.id);
 
@@ -234,7 +234,7 @@ export const updateList = async (req: Request, res: Response) => {
           data: {
             listId: validateId.data.id,
             itemId,
-            userId, // Assuming userId is also needed here
+            userId, 
           },
         });
       }
@@ -247,6 +247,7 @@ export const updateList = async (req: Request, res: Response) => {
   }
 };
 
+
 // Delete List
 export const deleteList = async (req: Request, res: Response) =>  {
   try {
@@ -255,6 +256,8 @@ export const deleteList = async (req: Request, res: Response) =>  {
     }
 
     const userId = req.user.id;
+
+    console.log("Received ID:", req.params.id);
 
     const validateId = idSchema.safeParse({
       id: Number(req.params.id),

@@ -219,39 +219,6 @@ export const refreshToken = async (req: Request, res: Response) => {
 }
 }
 
-
-// Get all users
-export const getAllUsers = async (req: Request, res: Response) => {
-  try {
-    const users = await db.user.findMany();
-
-    return success(res, "Users fetched successfully", users);
-  } catch (err) {
-    return internalServerError(res);
-  }
-}
-
-// Get user by id
-export const getUserById = async (req: Request, res: Response) => {
-  try {
-    const validateId = req.params.id;
-
-    if (!validateId) {
-      return validationError(res, "Id is required");
-    }
-
-    const user = await db.user.findUnique({
-      where: {
-        id: parseInt(validateId),
-      },
-    });
-
-    return success(res, "User fetched successfully", user);
-  } catch (err) {
-    return internalServerError(res);
-  }
-}
-
 // Update username
 export const updateUser = async (req: Request, res: Response) => {
   try {
@@ -368,3 +335,36 @@ export const logout = async (req: Request, res: Response) => {
 
     return success(res, "Logout successfully");
 }
+
+
+// // Get all users
+// export const getAllUsers = async (req: Request, res: Response) => {
+//   try {
+//     const users = await db.user.findMany();
+
+//     return success(res, "Users fetched successfully", users);
+//   } catch (err) {
+//     return internalServerError(res);
+//   }
+// }
+
+// // Get user by id
+// export const getUserById = async (req: Request, res: Response) => {
+//   try {
+//     const validateId = req.params.id;
+
+//     if (!validateId) {
+//       return validationError(res, "Id is required");
+//     }
+
+//     const user = await db.user.findUnique({
+//       where: {
+//         id: parseInt(validateId),
+//       },
+//     });
+
+//     return success(res, "User fetched successfully", user);
+//   } catch (err) {
+//     return internalServerError(res);
+//   }
+// }

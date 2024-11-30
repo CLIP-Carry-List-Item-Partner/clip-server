@@ -9,14 +9,14 @@ export const listSchema = z.object({
 })
 
 export const listUpdateSchema = listSchema.pick({
-  // userId: true,
+ 
   name: true,
 })
 .extend({
     items: z.array(
     z.object({
       id: z.string(),
-      name: z.string().min(3).max(255),
+      // name: z.string().min(3).max(255),
     })
   ).optional(),
 });
