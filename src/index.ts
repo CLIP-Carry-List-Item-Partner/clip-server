@@ -18,7 +18,8 @@ const app = express();
 
 const allowedOrigins = [
   "https://oauth.pstmn.io", // postman
-  "https://localhost:5173" // dev client
+  "https://localhost:5173", // dev client
+  "https://clip-hub.tech"
 ];
 
 // [COOKIE PARSER]
