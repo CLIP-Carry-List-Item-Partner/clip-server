@@ -22,8 +22,8 @@ import {
 } from "@/utils/responses";
 
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
+  ENV.GOOGLE_CLIENT_ID,
+  ENV.GOOGLE_CLIENT_SECRET,
   'https://clip-hub.tech/auth/google/callback'
   // awalnya http://localhost:8080/auth/google/callback
 )
@@ -141,7 +141,7 @@ export const googleAuthCallback = async (req: Request, res: Response) => {
     // })
 
     // nanti pakai yang ini
-    return res.redirect(`${process.env.APP_FRONTEND_URL}`);
+    return res.redirect(`${ENV.APP_FRONTEND_URL}`);
 
   } catch (err) {
     console.log(err);
