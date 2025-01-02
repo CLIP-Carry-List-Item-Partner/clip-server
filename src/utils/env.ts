@@ -6,6 +6,7 @@ const ENV = {
   APP_JWT_SECRET: process.env.APP_JWT_SECRET,
   APP_JWT_REFRESH_SECRET:
     process.env.APP_JWT_REFRESH_SECRET,
+  // APP_FRONTEND_URL: process.env.APP_FRONTEND_URL || 'http://localhost:5173',
   APP_FRONTEND_URL: process.env.APP_FRONTEND_URL || 'http://localhost:5173',
   
 }
