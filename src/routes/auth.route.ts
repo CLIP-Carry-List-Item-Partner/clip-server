@@ -2,9 +2,9 @@ import { Router } from 'express';
 import {
   googleAuth,
   googleAuthCallback,
-  getAllUsers,
+  // getAllUsers,
   updateUser,
-  getUserById,
+  // getUserById,
   userProfile,
   profileUpdate,
   refreshToken,
